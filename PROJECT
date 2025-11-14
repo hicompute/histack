@@ -8,4 +8,14 @@ layout:
 - go.kubebuilder.io/v4
 projectName: histack
 repo: github.com/hicompute/histack
+resources:
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: histack.ir
+  group: ipam
+  kind: ClusterIPPool
+  path: github.com/hicompute/histack/api/v1alpha1
+  version: v1alpha1
 version: "3"
