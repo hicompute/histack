@@ -37,6 +37,7 @@ import (
 
 	ipamv1alpha1 "github.com/hicompute/histack/api/v1alpha1"
 	"github.com/hicompute/histack/internal/controller"
+	webhookv1alpha1 "github.com/hicompute/histack/internal/webhook/v1alpha1"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -184,6 +185,13 @@ func main() {
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ClusterIPPool")
 		os.Exit(1)
+	}
+	// nolint:goconst
+	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
+		if err := webhookv1alpha1.SetupClusterIPPoolWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "ClusterIPPool")
+			os.Exit(1)
+		}
 	}
 	// +kubebuilder:scaffold:builder
 
