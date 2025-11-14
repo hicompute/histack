@@ -18,13 +18,20 @@ package controller
 
 import (
 	"context"
+	"fmt"
+	"net"
+	"reflect"
 
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
+	"github.com/hicompute/histack/api/v1alpha1"
 	ipamv1alpha1 "github.com/hicompute/histack/api/v1alpha1"
+	netutils "github.com/hicompute/histack/pkg/net_utils"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // ClusterIPPoolReconciler reconciles a ClusterIPPool object
@@ -50,7 +57,34 @@ func (r *ClusterIPPoolReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	_ = logf.FromContext(ctx)
 
 	// TODO(user): your logic here
-
+	var pool v1alpha1.ClusterIPPool
+	if err := r.Get(ctx, req.NamespacedName, &pool); err != nil {
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+	_, ipnet, err := net.ParseCIDR(pool.Spec.CIDR)
+	if err != nil {
+		// Set a degraded condition
+		meta.SetStatusCondition(&pool.Status.Conditions, metav1.Condition{
+			Type:    "Ready",
+			Status:  metav1.ConditionFalse,
+			Reason:  "InvalidCIDR",
+			Message: fmt.Sprintf("Invalid CIDR: %v", err),
+		})
+		_ = r.Status().Update(ctx, &pool)
+		return ctrl.Result{}, nil
+	}
+	totalIPs := netutils.CountIPs(ipnet)
+	freeIPs := totalIPs
+	newStatus := pool.Status.DeepCopy()
+	newStatus.TotalIPs = totalIPs
+	newStatus.FreeIPs = freeIPs
+	if reflect.DeepEqual(&pool.Status, newStatus) {
+		return ctrl.Result{}, nil // no changes
+	}
+	pool.Status = *newStatus
+	if err := r.Status().Update(ctx, &pool); err != nil {
+		return ctrl.Result{}, err
+	}
 	return ctrl.Result{}, nil
 }
 

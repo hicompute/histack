@@ -187,7 +187,7 @@ func main() {
 		os.Exit(1)
 	}
 	// nolint:goconst
-	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
+	if os.Getenv("ENABLE_WEBHOOKS") == "true" {
 		if err := webhookv1alpha1.SetupClusterIPPoolWebhookWithManager(mgr); err != nil {
 			setupLog.Error(err, "unable to create webhook", "webhook", "ClusterIPPool")
 			os.Exit(1)

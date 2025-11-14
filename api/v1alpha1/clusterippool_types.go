@@ -25,14 +25,10 @@ import (
 
 // ClusterIPPoolSpec defines the desired state of ClusterIPPool
 type ClusterIPPoolSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-	// The following markers will use OpenAPI v3 schema to validate the value
-	// More info: https://book.kubebuilder.io/reference/markers/crd-validation.html
-
-	// foo is an example field of ClusterIPPool. Edit clusterippool_types.go to remove/update
-	// +optional
-	Foo *string `json:"foo,omitempty"`
+	// +kubebuilder:validation:Enum=v4;v6
+	IPFamily string `json:"ipFamily"`
+	CIDR     string `json:"cidr"`
+	Gateway  string `json:"gateway,omitempty"`
 }
 
 // ClusterIPPoolStatus defines the observed state of ClusterIPPool.
@@ -55,12 +51,18 @@ type ClusterIPPoolStatus struct {
 	// +listType=map
 	// +listMapKey=type
 	// +optional
-	Conditions []metav1.Condition `json:"conditions,omitempty"`
+	Conditions   []metav1.Condition `json:"conditions,omitempty"`
+	TotalIPs     uint64             `json:"totalIPs,omitempty"`
+	AllocatedIPs uint64             `json:"allocatedIPs,omitempty"`
+	FreeIPs      uint64             `json:"freeIPs,omitempty"`
+	// +kubebuilder:default=0
+	NextIndex       uint64   `json:"nextIndex"`
+	ReleasedIndexes []uint64 `json:"releasedIndexes,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-
+// +kubebuilder:resource:scope=Cluster
 // ClusterIPPool is the Schema for the clusterippools API
 type ClusterIPPool struct {
 	metav1.TypeMeta `json:",inline"`
