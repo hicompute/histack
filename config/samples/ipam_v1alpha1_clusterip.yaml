@@ -1,0 +1,9 @@
+apiVersion: ipam.histack.ir/v1alpha1
+kind: ClusterIP
+metadata:
+  labels:
+    app.kubernetes.io/name: histack
+    app.kubernetes.io/managed-by: kustomize
+  name: clusterip-sample
+spec:
+  # TODO(user): Add fields here
