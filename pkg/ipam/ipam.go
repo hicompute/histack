@@ -3,13 +3,16 @@ package ipam
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/hicompute/histack/api/v1alpha1"
 	"github.com/hicompute/histack/pkg/k8s"
 	netutils "github.com/hicompute/histack/pkg/net_utils"
+	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -28,28 +31,49 @@ func New() *IPAM {
 	}
 }
 
-func (ipam *IPAM) FindOrCreateClusterIP(r IPAMRequest) (*v1alpha1.ClusterIP, error) {
+func (ipam *IPAM) FindOrCreateClusterIP(r IPAMRequest) (*v1alpha1.ClusterIP, *v1alpha1.ClusterIPPool, error) {
 	ctx := context.Background()
-	klog.Infof("%v", r)
-	resource := r.Namespace + "/" + r.Name
+	var pod corev1.Pod
+
+	if err := ipam.k8sClient.Get(ctx, types.NamespacedName{Namespace: r.Namespace, Name: r.Name}, &pod); err != nil {
+		return nil, nil, err
+	}
+	kubevirtVM := pod.Labels["vm.kubevirt.io/name"]
+	resource := r.Namespace + "/"
+	if kubevirtVM != "" {
+		resource += kubevirtVM
+	} else {
+		resource += r.Name
+	}
+
 	var list v1alpha1.ClusterIPList
-	if err := ipam.k8sClient.List(ctx, &list); err != nil {
-		return nil, err
+	if err := ipam.k8sClient.List(ctx, &list, &client.ListOptions{
+		FieldSelector: fields.AndSelectors(
+			fields.OneTermEqualSelector("spec.family", r.Family),
+			fields.OneTermEqualSelector("spec.containerInterface", r.Interface),
+			fields.OneTermEqualSelector("spec.resource", resource),
+		),
+		Limit: 1000,
+	}); err != nil {
+		return nil, nil, err
 	}
-
+	mac := netutils.GenerateVethMAC(resource)
 	if len(list.Items) < 1 {
-		return ipam.createClusterIP(r.Interface, r.Mac, r.Family, resource)
+		return ipam.createClusterIP(r.Interface, &mac, r.Family, resource)
 	}
-
-	return &list.Items[0], nil
+	var ipPool v1alpha1.ClusterIPPool
+	if err := ipam.k8sClient.Get(ctx, types.NamespacedName{Name: list.Items[0].Spec.ClusterIPPool}, &ipPool); err != nil {
+		return nil, nil, err
+	}
+	return &list.Items[0], &ipPool, nil
 }
 
-func (ipam *IPAM) createClusterIP(iface string, mac *string, ipFamily, resource string) (*v1alpha1.ClusterIP, error) {
+func (ipam *IPAM) createClusterIP(iface string, mac *string, ipFamily, resource string) (*v1alpha1.ClusterIP, *v1alpha1.ClusterIPPool, error) {
 	ctx := context.Background()
 
 	ipPool, err := ipam.findEmptyClusterIPPool(ipFamily)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	var idx uint64
@@ -70,16 +94,20 @@ func (ipam *IPAM) createClusterIP(iface string, mac *string, ipFamily, resource 
 
 	ipAddress, err := netutils.PickIPFromCIDRindex(ipPool.Spec.CIDR, idx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	clusterIP := &v1alpha1.ClusterIP{
+		ObjectMeta: v1.ObjectMeta{
+			Name: strings.Replace(resource, "/", "-", -1) + "-" + iface,
+		},
 		Spec: v1alpha1.ClusterIPSpec{
 			ClusterIPPool: ipPool.GetName(),
 			Mac:           *mac,
 			Interface:     iface,
 			Address:       ipAddress,
 			Family:        ipFamily,
+			Resource:      resource,
 		},
 		Status: v1alpha1.ClusterIPStatus{
 			History: []v1alpha1.ClusterIPHistory{{
@@ -89,14 +117,15 @@ func (ipam *IPAM) createClusterIP(iface string, mac *string, ipFamily, resource 
 	}
 
 	if err := ipam.k8sClient.Create(ctx, clusterIP); err != nil {
-		return nil, err
+		klog.Errorf("the error on create clusterIP: %v", err)
+		return nil, nil, err
 	}
 
 	if err := ipam.k8sClient.Status().Update(ctx, ipPool); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return clusterIP, nil
+	return clusterIP, ipPool, nil
 }
 
 func (ipam *IPAM) findEmptyClusterIPPool(ipFamily string) (*v1alpha1.ClusterIPPool, error) {
