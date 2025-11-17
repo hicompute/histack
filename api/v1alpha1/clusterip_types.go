@@ -25,11 +25,12 @@ import (
 
 // ClusterIPSpec defines the desired state of ClusterIP
 type ClusterIPSpec struct {
-	ClusterIPPool string `json:"clusterIpPoolName"`
+	ClusterIPPool string `json:"clusterIPPool"`
 	Interface     string `json:"containerInterface"`
 	Address       string `json:"address"`
 	Mac           string `json:"mac,omitempty"`
-	Family        string `json:"Family"`
+	Family        string `json:"family"`
+	Resource      string `json:"resource"`
 }
 
 type ClusterIPHistory struct {
@@ -66,8 +67,13 @@ type ClusterIPStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-
-// ClusterIP is the Schema for the clusterips API
+// +kubebuilder:resource:scope=Cluster
+// +kubebuilder:printcolumn:name="Resource",type=string,JSONPath=.spec.resource
+// +kubebuilder:printcolumn:name="MAC",type=string,JSONPath=.spec.mac
+// +kubebuilder:printcolumn:name="Age",type=date,JSONPath=.metadata.creationTimestamp
+// +kubebuilder:selectablefield:JSONPath=.spec.resource
+// +kubebuilder:selectablefield:JSONPath=.spec.containerInterface
+// +kubebuilder:selectablefield:JSONPath=.spec.family
 type ClusterIP struct {
 	metav1.TypeMeta `json:",inline"`
 

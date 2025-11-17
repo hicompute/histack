@@ -17,7 +17,6 @@ spec:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: ClusterIPPool is the Schema for the clusterippools API
         properties:
           apiVersion:
             description: |-
@@ -148,6 +147,8 @@ spec:
         required:
         - spec
         type: object
+    selectableFields:
+    - jsonPath: .spec.ipFamily
     served: true
     storage: true
     subresources:

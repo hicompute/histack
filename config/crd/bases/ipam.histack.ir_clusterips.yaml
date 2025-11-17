@@ -12,12 +12,21 @@ spec:
     listKind: ClusterIPList
     plural: clusterips
     singular: clusterip
-  scope: Namespaced
+  scope: Cluster
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .spec.resource
+      name: Resource
+      type: string
+    - jsonPath: .spec.mac
+      name: MAC
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: ClusterIP is the Schema for the clusterips API
         properties:
           apiVersion:
             description: |-
@@ -39,21 +48,24 @@ spec:
           spec:
             description: spec defines the desired state of ClusterIP
             properties:
-              Family:
-                type: string
               address:
                 type: string
-              clusterIpPoolName:
+              clusterIPPool:
                 type: string
               containerInterface:
                 type: string
+              family:
+                type: string
               mac:
                 type: string
+              resource:
+                type: string
             required:
-            - Family
             - address
-            - clusterIpPoolName
+            - clusterIPPool
             - containerInterface
+            - family
+            - resource
             type: object
           status:
             description: status defines the observed state of ClusterIP
@@ -152,6 +164,10 @@ spec:
         required:
         - spec
         type: object
+    selectableFields:
+    - jsonPath: .spec.resource
+    - jsonPath: .spec.containerInterface
+    - jsonPath: .spec.family
     served: true
     storage: true
     subresources:

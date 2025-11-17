@@ -63,7 +63,7 @@ type ClusterIPPoolStatus struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Cluster
-// ClusterIPPool is the Schema for the clusterippools API
+// +kubebuilder:selectablefield:JSONPath=.spec.ipFamily
 type ClusterIPPool struct {
 	metav1.TypeMeta `json:",inline"`
 
