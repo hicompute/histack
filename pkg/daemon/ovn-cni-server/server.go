@@ -9,6 +9,7 @@ import (
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
+	types100 "github.com/containernetworking/cni/pkg/types/100"
 
 	"github.com/containernetworking/cni/pkg/version"
 	cniTypes "github.com/hicompute/histack/pkg/daemon/ovn-cni-server/types"
@@ -97,6 +98,7 @@ func (s *CNIServer) handleConnection(conn net.Conn) {
 }
 
 func (s *CNIServer) handleAdd(req skel.CmdArgs) cniTypes.CNIResponse {
+
 	k8sArgs := cniTypes.CniKubeArgs{}
 	if err := types.LoadArgs(req.Args, &k8sArgs); err != nil {
 		klog.Infof("error loading args: %v", err)
@@ -106,7 +108,20 @@ func (s *CNIServer) handleAdd(req skel.CmdArgs) cniTypes.CNIResponse {
 	}
 	K8S_POD_NAMESPACE := string(k8sArgs.K8S_POD_NAMESPACE)
 	K8S_POD_NAME := string(k8sArgs.K8S_POD_NAME)
-	hostIface, contIface, err := netUtils.SetupVeth(req.Netns, req.IfName, "", 1500)
+	clusterIP, clusterIPPool, err := s.ipam.FindOrCreateClusterIP(histack_ipam.IPAMRequest{
+		Interface: req.IfName,
+		Namespace: K8S_POD_NAMESPACE,
+		Name:      K8S_POD_NAME,
+		Family:    "v4",
+	})
+
+	if err != nil {
+		return cniTypes.CNIResponse{
+			Error: err.Error(),
+		}
+	}
+
+	hostIface, contIface, err := netUtils.SetupVeth(req.Netns, req.IfName, clusterIP.Spec.Mac, 1500)
 	if err != nil {
 		return cniTypes.CNIResponse{
 			Error: err.Error(),
@@ -129,13 +144,23 @@ func (s *CNIServer) handleAdd(req skel.CmdArgs) cniTypes.CNIResponse {
 			Error: err.Error(),
 		}
 	}
-
+	result := current.Result{
+		CNIVersion: version.Current(),
+		Interfaces: []*current.Interface{contIface},
+	}
+	_, ipNet, err := net.ParseCIDR(clusterIPPool.Spec.CIDR)
+	if req.IfName == "eth0" {
+		result.IPs = []*current.IPConfig{
+			{
+				Interface: types100.Int(0),
+				Address:   net.IPNet{IP: net.ParseIP(clusterIP.Spec.Address), Mask: net.IPMask(ipNet.Mask)},
+				Gateway:   net.IP(clusterIPPool.Spec.Gateway),
+			},
+		}
+	}
 	return cniTypes.CNIResponse{
-		Result: current.Result{
-			CNIVersion: version.Current(),
-			Interfaces: []*current.Interface{contIface},
-		},
-		Error: "",
+		Result: result,
+		Error:  "",
 	}
 }
 
