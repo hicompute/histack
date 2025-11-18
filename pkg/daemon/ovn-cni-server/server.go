@@ -70,7 +70,6 @@ func (s *CNIServer) run() {
 		}
 		go s.handleConnection(conn)
 	}
-
 }
 
 func (s *CNIServer) handleConnection(conn net.Conn) {
@@ -120,9 +119,12 @@ func (s *CNIServer) handleAdd(req skel.CmdArgs) cniTypes.CNIResponse {
 			Error: err.Error(),
 		}
 	}
-
-	hostIface, contIface, err := netUtils.SetupVeth(req.Netns, req.IfName, clusterIP.Spec.Mac, 1500)
+	_, ipNet, err := net.ParseCIDR(clusterIPPool.Spec.CIDR)
+	ipAddress := net.IPNet{IP: net.ParseIP(clusterIP.Spec.Address), Mask: net.IPMask(ipNet.Mask)}
+	gateway := net.IP(clusterIPPool.Spec.Gateway)
+	hostIface, contIface, err := netUtils.SetupVeth(req.Netns, req.IfName, clusterIP.Spec.Mac, 1500, &ipAddress, &gateway)
 	if err != nil {
+		klog.Errorf("%v", err)
 		return cniTypes.CNIResponse{
 			Error: err.Error(),
 		}
@@ -138,7 +140,6 @@ func (s *CNIServer) handleAdd(req skel.CmdArgs) cniTypes.CNIResponse {
 	}
 
 	if err := s.ovnAgent.CreateLogicalPort("public", ifaceId, contIface.Mac); err != nil {
-		klog.Errorf("error on creating ovn logical port %s on ls %s: %v", ifaceId, "public", err)
 		_ = s.ovsAgent.DelPort("br-int", ifaceId)
 		return cniTypes.CNIResponse{
 			Error: err.Error(),
@@ -148,13 +149,13 @@ func (s *CNIServer) handleAdd(req skel.CmdArgs) cniTypes.CNIResponse {
 		CNIVersion: version.Current(),
 		Interfaces: []*current.Interface{contIface},
 	}
-	_, ipNet, err := net.ParseCIDR(clusterIPPool.Spec.CIDR)
+
 	if req.IfName == "eth0" {
 		result.IPs = []*current.IPConfig{
 			{
 				Interface: types100.Int(0),
-				Address:   net.IPNet{IP: net.ParseIP(clusterIP.Spec.Address), Mask: net.IPMask(ipNet.Mask)},
-				Gateway:   net.IP(clusterIPPool.Spec.Gateway),
+				Address:   ipAddress,
+				Gateway:   gateway,
 			},
 		}
 	}
@@ -175,13 +176,14 @@ func (s *CNIServer) handleDel(req skel.CmdArgs) cniTypes.CNIResponse {
 	K8S_POD_NAMESPACE := string(k8sArgs.K8S_POD_NAMESPACE)
 	K8S_POD_NAME := string(k8sArgs.K8S_POD_NAME)
 	ifaceId := K8S_POD_NAMESPACE + "_" + K8S_POD_NAME + "_" + req.IfName
-	if err := s.ovsAgent.DelPort("br-int", ifaceId); err != nil {
+
+	if err := s.ovnAgent.DeleteLogicalPort("public", ifaceId); err != nil {
 		klog.Errorf("%v", err)
 		return cniTypes.CNIResponse{
 			Error: err.Error(),
 		}
 	}
-	if err := s.ovnAgent.DeleteLogicalPort("public", ifaceId); err != nil {
+	if err := s.ovsAgent.DelPort("br-int", ifaceId); err != nil {
 		klog.Errorf("%v", err)
 		return cniTypes.CNIResponse{
 			Error: err.Error(),
