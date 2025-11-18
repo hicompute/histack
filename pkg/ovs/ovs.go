@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	ovsModel "github.com/cybercoder/ovn-cni/pkg/ovs/models"
 	"github.com/google/uuid"
+	ovsModel "github.com/hicompute/histack/pkg/ovs/models"
 	"github.com/ovn-kubernetes/libovsdb/model"
 	"github.com/ovn-kubernetes/libovsdb/ovsdb"
 	"k8s.io/klog/v2"

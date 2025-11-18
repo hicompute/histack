@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"log"
 
-	models "github.com/cybercoder/ovn-cni/pkg/ovnnb/models"
 	"github.com/google/uuid"
+	models "github.com/hicompute/histack/pkg/ovn/models"
 	"github.com/ovn-kubernetes/libovsdb/model"
 	"github.com/ovn-kubernetes/libovsdb/ovsdb"
 	"k8s.io/klog/v2"

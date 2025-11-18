@@ -15,12 +15,12 @@ type OvsAgent struct {
 
 func CreateOVSagent() (*OvsAgent, error) {
 	dbModel, err := model.NewClientDBModel("Open_vSwitch", map[string]model.Model{
-		"Bridge":    &ovsModels.Bridge{},
-		"Port":      &ovsModels.Port{},
-		"Interface": &ovsModels.Interface{},
+		ovsModels.BridgeTable:    &ovsModels.Bridge{},
+		ovsModels.PortTable:      &ovsModels.Port{},
+		ovsModels.InterfaceTable: &ovsModels.Interface{},
 	})
 	dbModel.SetIndexes(map[string][]model.ClientIndex{
-		"Port": {{Columns: []model.ColumnKey{
+		ovsModels.PortTable: {{Columns: []model.ColumnKey{
 			{Column: "external_ids", Key: "iface-id"},
 		}}},
 	})
