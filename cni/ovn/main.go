@@ -47,8 +47,8 @@ func runOnDaemon(CMD string, args *skel.CmdArgs) (*current.Result, error) {
 	if err := callCniDaemon(cniDsocket, ovnCniTypes.CNIRequest{
 		Cmd:     CMD,
 		CmdArgs: *args,
-	}, resp); err != nil {
-		return nil, fmt.Errorf("ovn cni daemon request failed: %w", err)
+	}, &resp); err != nil {
+		return nil, fmt.Errorf("histack ovn cni daemon request failed: %w", err)
 	}
 	if resp.Error != "" {
 		return nil, fmt.Errorf("%s", resp.Error)
@@ -57,7 +57,7 @@ func runOnDaemon(CMD string, args *skel.CmdArgs) (*current.Result, error) {
 	return &resp.Result, nil
 }
 
-func callCniDaemon(socket string, req ovnCniTypes.CNIRequest, resp ovnCniTypes.CNIResponse) error {
+func callCniDaemon(socket string, req ovnCniTypes.CNIRequest, resp *ovnCniTypes.CNIResponse) error {
 	conn, err := net.Dial("unix", socket)
 	if err != nil {
 		return err
