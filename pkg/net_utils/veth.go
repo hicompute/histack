@@ -7,9 +7,10 @@ import (
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/vishvananda/netlink"
+	"k8s.io/klog/v2"
 )
 
-func SetupVeth(contNetnsPath, contIfaceName, requestedMac string, mtu int) (*current.Interface, *current.Interface, error) {
+func SetupVeth(contNetnsPath, contIfaceName, requestedMac string, mtu int, ipAddress *net.IPNet, gatewayAddres *net.IP) (*current.Interface, *current.Interface, error) {
 	hostIface := &current.Interface{}
 	contIface := &current.Interface{}
 	contNetns, err := ns.GetNS(contNetnsPath)
@@ -23,9 +24,31 @@ func SetupVeth(contNetnsPath, contIfaceName, requestedMac string, mtu int) (*cur
 		if err != nil {
 			return err
 		}
-
 		if err := setInterfaceUp(contIfaceName); err != nil {
 			return err
+		}
+		if ipAddress != nil {
+			link, err := AddInterfaceIPAddress(contIfaceName, &netlink.Addr{
+				IPNet:     ipAddress,
+				LinkIndex: containerVeth.Index,
+			})
+			if err != nil {
+				return err
+			}
+			if gatewayAddres != nil {
+				dr := netlink.Route{
+					Dst:       nil,
+					Gw:        *gatewayAddres,
+					Flags:     int(netlink.FLAG_ONLINK),
+					LinkIndex: link.Attrs().Index,
+					// Scope:     netlink.SCOPE_UNIVERSE,
+					Src: ipAddress.IP,
+				}
+				if err := netlink.RouteAdd(&dr); err != nil {
+					klog.Errorf("error on route add: %v", err)
+					return err
+				}
+			}
 		}
 
 		contIface.Name = containerVeth.Name
@@ -86,4 +109,15 @@ func setHardwareAddr(ifName, macAddress string) error {
 		return err
 	}
 	return nil
+}
+
+func AddInterfaceIPAddress(ifName string, ipAddress *netlink.Addr) (netlink.Link, error) {
+	ifLink, err := netlink.LinkByName(ifName)
+	if err != nil {
+		return nil, err
+	}
+	if err := netlink.AddrAdd(ifLink, ipAddress); err != nil {
+		return nil, err
+	}
+	return ifLink, nil
 }
