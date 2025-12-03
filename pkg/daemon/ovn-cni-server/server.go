@@ -121,7 +121,7 @@ func (s *CNIServer) handleAdd(req skel.CmdArgs) cniTypes.CNIResponse {
 	}
 	_, ipNet, err := net.ParseCIDR(clusterIPPool.Spec.CIDR)
 	ipAddress := net.IPNet{IP: net.ParseIP(clusterIP.Spec.Address), Mask: net.IPMask(ipNet.Mask)}
-	gateway := net.IP(clusterIPPool.Spec.Gateway)
+	gateway := net.ParseIP(clusterIPPool.Spec.Gateway)
 	hostIface, contIface, err := netUtils.SetupVeth(req.Netns, req.IfName, clusterIP.Spec.Mac, 1500, &ipAddress, &gateway)
 	if err != nil {
 		klog.Errorf("%v", err)
