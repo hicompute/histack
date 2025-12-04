@@ -3,6 +3,7 @@ package ipam
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -57,7 +58,12 @@ func (ipam *IPAM) FindOrCreateClusterIP(r IPAMRequest) (*v1alpha1.ClusterIP, *v1
 	}); err != nil {
 		return nil, nil, err
 	}
-	mac := netutils.GenerateVethMAC(resource)
+	macPrefix := os.Getenv("MAC_PREFIX")
+	if macPrefix == "" {
+		macPrefix = "02"
+	}
+
+	mac := netutils.GenerateVethMAC(resource, macPrefix)
 	if len(list.Items) < 1 {
 		return ipam.createClusterIP(r.Interface, &mac, r.Family, resource)
 	}
