@@ -55,6 +55,9 @@ spec:
               containerInterface:
                 type: string
               family:
+                enum:
+                - v4
+                - v6
                 type: string
               mac:
                 type: string
@@ -168,6 +171,7 @@ spec:
     - jsonPath: .spec.resource
     - jsonPath: .spec.containerInterface
     - jsonPath: .spec.family
+    - jsonPath: .spec.mac
     served: true
     storage: true
     subresources:

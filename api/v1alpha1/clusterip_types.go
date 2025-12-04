@@ -29,8 +29,9 @@ type ClusterIPSpec struct {
 	Interface     string `json:"containerInterface"`
 	Address       string `json:"address"`
 	Mac           string `json:"mac,omitempty"`
-	Family        string `json:"family"`
-	Resource      string `json:"resource"`
+	// +kubebuilder:validation:Enum=v4;v6
+	Family   string `json:"family"`
+	Resource string `json:"resource"`
 }
 
 type ClusterIPHistory struct {
@@ -74,6 +75,7 @@ type ClusterIPStatus struct {
 // +kubebuilder:selectablefield:JSONPath=.spec.resource
 // +kubebuilder:selectablefield:JSONPath=.spec.containerInterface
 // +kubebuilder:selectablefield:JSONPath=.spec.family
+// +kubebuilder:selectablefield:JSONPath=.spec.mac
 type ClusterIP struct {
 	metav1.TypeMeta `json:",inline"`
 
