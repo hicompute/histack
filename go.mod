@@ -5,7 +5,6 @@ go 1.25.1
 require (
 	github.com/containernetworking/cni v1.3.0
 	github.com/containernetworking/plugins v1.8.0
-	github.com/cybercoder/ovn-cni v0.0.0-20251104132302-217986621175
 	github.com/google/uuid v1.6.0
 	github.com/onsi/ginkgo/v2 v2.25.1
 	github.com/onsi/gomega v1.38.1
