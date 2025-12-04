@@ -152,3 +152,20 @@ func (ipam *IPAM) findEmptyClusterIPPool(ipFamily string) (*v1alpha1.ClusterIPPo
 	}
 	return nil, fmt.Errorf("no free %s pool found", ipFamily)
 }
+
+func (ipam *IPAM) FindClusterIPbyFamilyandMAC(mac, family string) (*v1alpha1.ClusterIP, error) {
+	var list v1alpha1.ClusterIPList
+	if err := ipam.k8sClient.List(context.Background(), &list, &client.ListOptions{
+		FieldSelector: fields.AndSelectors(
+			fields.OneTermEqualSelector("spec.family", family),
+			fields.OneTermEqualSelector("spec.mac", mac),
+		),
+		Limit: 1,
+	}); err != nil {
+		return nil, err
+	}
+	if len(list.Items) > 0 {
+		return &list.Items[0], nil
+	}
+	return nil, fmt.Errorf("not found")
+}
