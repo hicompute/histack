@@ -11,7 +11,7 @@ func main() {
 	var cniSocketFile string
 
 	flag.StringVar(&cniSocketFile, "cni-socket", "/var/run/histack-ovn-cni.sock", "The unix socket file cni daemon should create.")
-	if err := ovncnid.Start("/var/run/histack-ovn-cni.sock"); err != nil {
+	if err := ovncnid.Start(cniSocketFile); err != nil {
 		klog.Fatalf("Error on starting ovn cni daemon: %v", err)
 	}
 }
