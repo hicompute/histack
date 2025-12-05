@@ -25,9 +25,15 @@ resources:
 - api:
     crdVersion: v1
     namespaced: true
+  controller: true
   domain: histack.ir
   group: ipam
   kind: ClusterIP
   path: github.com/hicompute/histack/api/v1alpha1
+  version: v1alpha1
+- controller: true
+  domain: histack.ir
+  group: kubevirt
+  kind: KubeVirt
   version: v1alpha1
 version: "3"
