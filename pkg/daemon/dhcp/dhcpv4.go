@@ -16,13 +16,13 @@ type HDHCPV4 struct {
 	server server4.Server
 }
 
-func Start() error {
+func Start(ifaceName string) error {
 	laddr := &net.UDPAddr{IP: net.IPv4zero, Port: 67}
 
 	ipam := histack_ipam.New()
 	h := &HDHCPV4{ipam: *ipam}
 
-	srv, err := server4.NewServer("br-ext", laddr, h.handler, server4.WithDebugLogger())
+	srv, err := server4.NewServer(ifaceName, laddr, h.handler, server4.WithDebugLogger())
 	if err != nil {
 		return err
 	}
@@ -31,9 +31,6 @@ func Start() error {
 
 func (hd4 *HDHCPV4) handler(conn net.PacketConn, peer net.Addr, req *dhcpv4.DHCPv4) {
 	macPrefix := os.Getenv("MAC_PREFIX")
-	if macPrefix == "" {
-		macPrefix = "02"
-	}
 	mac := req.ClientHWAddr.String()
 	if !strings.HasPrefix(mac, macPrefix) {
 		return
@@ -70,31 +67,51 @@ func buildReply(req *dhcpv4.DHCPv4, msgType dhcpv4.MessageType) (*dhcpv4.DHCPv4,
 }
 
 // applyCommonOptions sets mask, server ID, routes, etc.
-func applyCommonOptions(pkt *dhcpv4.DHCPv4) {
-	// Subnet mask /24
-	pkt.UpdateOption(dhcpv4.OptSubnetMask(net.CIDRMask(24, 32)))
+func (hd4 *HDHCPV4) applyCommonOptions(pkt *dhcpv4.DHCPv4) {
+	clusterIP, err := hd4.ipam.FindClusterIPbyFamilyandMAC(pkt.ClientHWAddr.String(), "v4")
+	if err != nil {
+		klog.Errorf("IPAM lookup failed: %v", err)
+		return
+	}
+	clusterIPPool, err := hd4.ipam.FindClusterIPPoolByName(clusterIP.Spec.ClusterIPPool)
+	if err != nil {
+		klog.Errorf("%v", err)
+		return
+	}
+	_, ipNet, _ := net.ParseCIDR(clusterIPPool.Spec.CIDR)
+	pkt.UpdateOption(dhcpv4.OptSubnetMask(ipNet.Mask))
+	ip := net.ParseIP(clusterIP.Spec.Address)
+	pkt.YourIPAddr = ip
+
+	if clusterIPPool.Spec.Gateway != "" {
+		var routes []*dhcpv4.Route
+		gwIP := net.ParseIP(clusterIPPool.Spec.Gateway)
+		if !ipNet.Contains(gwIP) {
+			p2pRoute := &dhcpv4.Route{
+				Dest: &net.IPNet{
+					IP:   gwIP,
+					Mask: net.CIDRMask(32, 32),
+				},
+				Router: net.ParseIP("0.0.0.0"),
+			}
+			routes = append(routes, p2pRoute)
+		}
+		defaultRoute := &dhcpv4.Route{
+			Dest: &net.IPNet{
+				IP:   net.ParseIP("0.0.0.0"),
+				Mask: net.CIDRMask(0, 32),
+			},
+			Router: gwIP,
+		}
+		routes = append(routes, defaultRoute)
+		pkt.UpdateOption(dhcpv4.OptClasslessStaticRoute(routes...))
+	}
 
 	// Server IP
-	pkt.ServerIPAddr = net.ParseIP("172.16.17.66")
-	pkt.UpdateOption(dhcpv4.OptServerIdentifier(net.ParseIP("172.16.17.66")))
-	// Classless static routes
-	route1 := &dhcpv4.Route{
-		Dest: &net.IPNet{
-			IP:   net.ParseIP("172.16.22.1"),
-			Mask: net.CIDRMask(32, 32),
-		},
-		Router: net.ParseIP("0.0.0.0"),
-	}
+	serverIP := net.ParseIP(os.Getenv("HISTACK_DHCP4_SERVER_ADDRESS"))
+	pkt.ServerIPAddr = serverIP
+	pkt.UpdateOption(dhcpv4.OptServerIdentifier(serverIP))
 
-	route2 := &dhcpv4.Route{
-		Dest: &net.IPNet{
-			IP:   net.ParseIP("0.0.0.0"),
-			Mask: net.CIDRMask(0, 32),
-		},
-		Router: net.ParseIP("172.16.22.1"),
-	}
-
-	pkt.UpdateOption(dhcpv4.OptClasslessStaticRoute(route1, route2))
 }
 
 // sendPacket writes the DHCP packet
@@ -110,11 +127,6 @@ func sendPacket(conn net.PacketConn, peer net.Addr, pkt *dhcpv4.DHCPv4) {
 // ------------------------------------------------------------
 
 func (hd4 *HDHCPV4) handleDiscover(conn net.PacketConn, peer net.Addr, req *dhcpv4.DHCPv4) {
-	ip, err := hd4.ipam.FindClusterIPbyFamilyandMAC(req.ClientHWAddr.String(), "v4")
-	if err != nil {
-		klog.Errorf("IPAM lookup failed: %v", err)
-		return
-	}
 
 	offer, err := buildReply(req, dhcpv4.MessageTypeOffer)
 	if err != nil {
@@ -122,9 +134,7 @@ func (hd4 *HDHCPV4) handleDiscover(conn net.PacketConn, peer net.Addr, req *dhcp
 		return
 	}
 
-	offer.YourIPAddr = net.ParseIP(ip.Spec.Address)
-
-	applyCommonOptions(offer)
+	hd4.applyCommonOptions(offer)
 
 	klog.Infof("Sending OFFER → %s", offer.YourIPAddr)
 
@@ -151,7 +161,7 @@ func (hd4 *HDHCPV4) handleRequest(conn net.PacketConn, peer net.Addr, req *dhcpv
 
 	ack.YourIPAddr = ip
 
-	applyCommonOptions(ack)
+	hd4.applyCommonOptions(ack)
 
 	klog.Infof("Sending ACK → %s", ack.YourIPAddr)
 
