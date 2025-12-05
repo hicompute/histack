@@ -8,6 +8,7 @@ import (
 	histack_ipam "github.com/hicompute/histack/pkg/ipam"
 	"github.com/insomniacslk/dhcp/dhcpv4"
 	"github.com/insomniacslk/dhcp/dhcpv4/server4"
+	"github.com/samber/lo"
 	"k8s.io/klog/v2"
 )
 
@@ -111,6 +112,12 @@ func (hd4 *HDHCPV4) applyCommonOptions(pkt *dhcpv4.DHCPv4) {
 	serverIP := net.ParseIP(os.Getenv("HISTACK_DHCP4_SERVER_ADDRESS"))
 	pkt.ServerIPAddr = serverIP
 	pkt.UpdateOption(dhcpv4.OptServerIdentifier(serverIP))
+
+	dnsServers := lo.Map(strings.Split(os.Getenv("HISTACK_DHCP4_DNS_SERVERS"), ","), func(d string, index int) net.IP {
+		return net.ParseIP(d)
+	})
+
+	pkt.UpdateOption(dhcpv4.OptDNS(dnsServers...))
 
 }
 
