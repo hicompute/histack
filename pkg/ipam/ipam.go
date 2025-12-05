@@ -169,3 +169,11 @@ func (ipam *IPAM) FindClusterIPbyFamilyandMAC(mac, family string) (*v1alpha1.Clu
 	}
 	return nil, fmt.Errorf("not found")
 }
+
+func (ipam *IPAM) FindClusterIPPoolByName(name string) (*v1alpha1.ClusterIPPool, error) {
+	var cipp v1alpha1.ClusterIPPool
+	if err := ipam.k8sClient.Get(context.Background(), client.ObjectKey{Name: name}, &cipp); err != nil {
+		return nil, err
+	}
+	return &cipp, nil
+}
