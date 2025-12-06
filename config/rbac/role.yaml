@@ -8,6 +8,7 @@ rules:
   - ipam.histack.ir
   resources:
   - clusterippools
+  - clusterips
   verbs:
   - create
   - delete
@@ -20,12 +21,14 @@ rules:
   - ipam.histack.ir
   resources:
   - clusterippools/finalizers
+  - clusterips/finalizers
   verbs:
   - update
 - apiGroups:
   - ipam.histack.ir
   resources:
   - clusterippools/status
+  - clusterips/status
   verbs:
   - get
   - patch

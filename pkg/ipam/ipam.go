@@ -41,6 +41,7 @@ func (ipam *IPAM) FindOrCreateClusterIP(r IPAMRequest) (*v1alpha1.ClusterIP, *v1
 	}
 	kubevirtVM := pod.Labels["vm.kubevirt.io/name"]
 	resource := r.Namespace + "/"
+	// var vmIface kubevirtv1.VirtualMachineInstanceNetworkInterface
 	if kubevirtVM != "" {
 		resource += kubevirtVM
 	} else {

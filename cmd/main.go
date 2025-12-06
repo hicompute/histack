@@ -186,11 +186,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := (&controller.KubeVirtReconciler{
+	if err := (&controller.KubeVirtVMReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "KubeVirt")
+		setupLog.Error(err, "unable to create controller", "controller", "KubeVirtVM")
 		os.Exit(1)
 	}
 	if err := (&controller.ClusterIPReconciler{
@@ -198,6 +198,13 @@ func main() {
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ClusterIP")
+		os.Exit(1)
+	}
+	if err := (&controller.KubevirtVMIReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "KubevirtVMI")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder
