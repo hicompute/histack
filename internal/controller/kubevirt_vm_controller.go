@@ -76,6 +76,9 @@ func (r *KubeVirtVMReconciler) handleVMDeletion(ctx context.Context, namespace, 
 
 	for _, clusterIP := range clusterIPList.Items {
 		updatedClusterIP := clusterIP.DeepCopy()
+		updatedClusterIP.Spec.Mac = ""
+		updatedClusterIP.Spec.Interface = ""
+		updatedClusterIP.Spec.Resource = ""
 		updatedClusterIP.Status.History = append(updatedClusterIP.Status.History,
 			v1alpha1.ClusterIPHistory{
 				Mac:         clusterIP.Spec.Mac,

@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 
+	"github.com/hicompute/histack/api/v1alpha1"
 	ipamv1alpha1 "github.com/hicompute/histack/api/v1alpha1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -46,10 +47,26 @@ type ClusterIPReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.22.1/pkg/reconcile
 func (r *ClusterIPReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = logf.FromContext(ctx)
+	log := logf.FromContext(ctx)
+	var clusterIP v1alpha1.ClusterIP
+	if err := r.Client.Get(ctx, client.ObjectKey{Name: req.Name}, &clusterIP); err != nil {
+		return ctrl.Result{}, err
+	}
 
-	// TODO(user): your logic here
-
+	if clusterIP.Spec.Mac == "" {
+		// handler release
+		var clusterIPPool v1alpha1.ClusterIPPool
+		if err := r.Client.Get(ctx, client.ObjectKey{Name: clusterIP.Spec.ClusterIPPool}, &clusterIPPool); err != nil {
+			return ctrl.Result{}, err
+		}
+		pool := clusterIPPool.DeepCopy()
+		pool.Status.ReleasedClusterIPs = append(pool.Status.ReleasedClusterIPs, clusterIP.GetName())
+		pool.Status.FreeIPs++
+		pool.Status.AllocatedIPs--
+		if err := r.Client.Status().Update(ctx, pool); err != nil {
+			log.Error(err, "update cluster ip pool failed.")
+		}
+	}
 	return ctrl.Result{}, nil
 }
 

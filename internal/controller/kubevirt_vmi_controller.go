@@ -49,8 +49,7 @@ func (r *KubevirtVMIReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		log.Error(err, "Error on getting cip list")
 	}
 
-	releaseIpList := clusterIPList.DeepCopy()
-	releaseIpList.Items = lo.Reduce(clusterIPList.Items, func(result []v1alpha1.ClusterIP, item v1alpha1.ClusterIP, _ int) []v1alpha1.ClusterIP {
+	releaseIpList := lo.Reduce(clusterIPList.Items, func(result []v1alpha1.ClusterIP, item v1alpha1.ClusterIP, _ int) []v1alpha1.ClusterIP {
 		_, ok := lo.Find(interfaces, func(i kubevirtv1.VirtualMachineInstanceNetworkInterface) bool {
 			return i.MAC == item.Spec.Mac
 		})
@@ -61,13 +60,16 @@ func (r *KubevirtVMIReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 				Interface:  item.Spec.Interface,
 				Resource:   item.Spec.Resource,
 			})
+			item.Spec.Mac = ""
+			item.Spec.Interface = ""
+			item.Spec.Resource = ""
 			result = append(result, item)
 		}
 		return result
 	}, []v1alpha1.ClusterIP{})
 
-	for i := range releaseIpList.Items {
-		if err := r.Update(ctx, &releaseIpList.Items[i]); err != nil {
+	for i := range releaseIpList {
+		if err := r.Update(ctx, &releaseIpList[i]); err != nil {
 			return ctrl.Result{}, err
 		}
 	}

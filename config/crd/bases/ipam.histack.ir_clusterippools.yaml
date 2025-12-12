@@ -133,10 +133,9 @@ spec:
                 default: 0
                 format: int64
                 type: integer
-              releasedIndexes:
+              releasedClusterIPs:
                 items:
-                  format: int64
-                  type: integer
+                  type: string
                 type: array
               totalIPs:
                 format: int64

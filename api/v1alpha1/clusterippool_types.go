@@ -56,8 +56,8 @@ type ClusterIPPoolStatus struct {
 	AllocatedIPs uint64             `json:"allocatedIPs,omitempty"`
 	FreeIPs      uint64             `json:"freeIPs,omitempty"`
 	// +kubebuilder:default=0
-	NextIndex       uint64   `json:"nextIndex"`
-	ReleasedIndexes []uint64 `json:"releasedIndexes,omitempty"`
+	NextIndex          uint64   `json:"nextIndex"`
+	ReleasedClusterIPs []string `json:"releasedClusterIPs,omitempty"`
 }
 
 // +kubebuilder:object:root=true

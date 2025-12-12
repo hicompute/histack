@@ -185,9 +185,9 @@ func (in *ClusterIPPoolStatus) DeepCopyInto(out *ClusterIPPoolStatus) {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
-	if in.ReleasedIndexes != nil {
-		in, out := &in.ReleasedIndexes, &out.ReleasedIndexes
-		*out = make([]uint64, len(*in))
+	if in.ReleasedClusterIPs != nil {
+		in, out := &in.ReleasedClusterIPs, &out.ReleasedClusterIPs
+		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
 }

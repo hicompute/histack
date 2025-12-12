@@ -11,8 +11,10 @@ import (
 	"github.com/hicompute/histack/pkg/k8s"
 	netutils "github.com/hicompute/histack/pkg/net_utils"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -85,26 +87,32 @@ func (ipam *IPAM) createClusterIP(iface string, mac *string, ipFamily, resource 
 
 	var idx uint64
 
-	if len(ipPool.Status.ReleasedIndexes) > 0 {
-		idx = ipPool.Status.ReleasedIndexes[0]
-		ipPool.Status.ReleasedIndexes = ipPool.Status.ReleasedIndexes[1:]
-		ipPool.Status.FreeIPs--
-		ipPool.Status.AllocatedIPs++
-	} else {
-		idx = ipPool.Status.NextIndex
-		ipPool.Status.FreeIPs--
-		ipPool.Status.AllocatedIPs++
-		if ipPool.Status.FreeIPs > 0 {
-			ipPool.Status.NextIndex++
-		}
-	}
+	var clusterIP v1alpha1.ClusterIP
+	ipPool = ipPool.DeepCopy()
 
+	ipPool.Status.AllocatedIPs++
+	ipPool.Status.FreeIPs--
+
+	if ipPool.Status.NextIndex >= ipPool.Status.TotalIPs {
+		// use a released ip
+		firstReleasedIPName := ipPool.Status.ReleasedClusterIPs[0]
+		if err = ipam.k8sClient.Get(ctx, client.ObjectKey{Name: firstReleasedIPName}, &clusterIP); err != nil {
+			klog.Errorf("the release cluster ip %s not found in pool %s!", firstReleasedIPName, ipPool.GetName())
+			return nil, nil, err
+		}
+
+		ipPool.Status.ReleasedClusterIPs = ipPool.Status.ReleasedClusterIPs[1:]
+		if err := ipam.k8sClient.Status().Update(ctx, ipPool); err != nil {
+			return nil, nil, err
+		}
+		return &clusterIP, nil, nil
+	}
 	ipAddress, err := netutils.PickIPFromCIDRindex(ipPool.Spec.CIDR, idx)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	clusterIP := &v1alpha1.ClusterIP{
+	clusterIP = v1alpha1.ClusterIP{
 		ObjectMeta: v1.ObjectMeta{
 			Name: strings.Replace(resource, "/", "-", -1) + "-" + iface,
 		},
@@ -123,7 +131,7 @@ func (ipam *IPAM) createClusterIP(iface string, mac *string, ipFamily, resource 
 		},
 	}
 
-	if err := ipam.k8sClient.Create(ctx, clusterIP); err != nil {
+	if err := ipam.k8sClient.Create(ctx, &clusterIP); err != nil {
 		klog.Errorf("the error on create clusterIP: %v", err)
 		return nil, nil, err
 	}
@@ -132,7 +140,7 @@ func (ipam *IPAM) createClusterIP(iface string, mac *string, ipFamily, resource 
 		return nil, nil, err
 	}
 
-	return clusterIP, ipPool, nil
+	return &clusterIP, ipPool, nil
 }
 
 func (ipam *IPAM) findEmptyClusterIPPool(ipFamily string) (*v1alpha1.ClusterIPPool, error) {
@@ -151,7 +159,7 @@ func (ipam *IPAM) findEmptyClusterIPPool(ipFamily string) (*v1alpha1.ClusterIPPo
 			return &pool, nil
 		}
 	}
-	return nil, fmt.Errorf("no free %s pool found", ipFamily)
+	return nil, errors.NewNotFound(schema.GroupResource{Group: v1alpha1.GroupVersion.Group, Resource: "clusterippools"}, fmt.Sprintf("no free %s pool", ipFamily))
 }
 
 func (ipam *IPAM) FindClusterIPbyFamilyandMAC(mac, family string) (*v1alpha1.ClusterIP, error) {
@@ -177,4 +185,21 @@ func (ipam *IPAM) FindClusterIPPoolByName(name string) (*v1alpha1.ClusterIPPool,
 		return nil, err
 	}
 	return &cipp, nil
+}
+
+func (ipam *IPAM) FindReleasedClusterIP(family string) (*v1alpha1.ClusterIP, error) {
+	var list v1alpha1.ClusterIPList
+	if err := ipam.k8sClient.List(context.Background(), &list, &client.ListOptions{
+		FieldSelector: fields.AndSelectors(
+			fields.OneTermEqualSelector("spec.family", family),
+			fields.OneTermEqualSelector("spec.mac", ""),
+		),
+		Limit: 1,
+	}); err != nil {
+		return nil, err
+	}
+	if len(list.Items) > 0 {
+		return &list.Items[0], nil
+	}
+	return nil, fmt.Errorf("No released ClusterIP %s found.", family)
 }

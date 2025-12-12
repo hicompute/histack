@@ -1,0 +1,131 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    labels:
+        k8s-app: ovn-central
+    name: ovn-central
+    namespace: ik8s-system
+spec:
+    replicas: 1
+    selector:
+        matchLabels:
+            k8s-app: ovn-central
+    template:
+        metadata:
+            labels:
+                k8s-app: ovn-central
+                name: ovn-central
+        spec:
+            containers:
+                - args:
+                      - --db-nb-addr=192.168.12.177
+                      - --db-nb-create-insecure-remote=yes
+                      - run_nb_ovsdb
+                  command:
+                      - ovn-ctl
+                  env:
+                      - name: CENTRAL_IP
+                        value: 192.168.12.177
+                  image: registry.devnovin.ir/novincloud/docker-images/ovs:dpdk
+                  imagePullPolicy: IfNotPresent
+                  name: nb-ovsdb
+                  ports:
+                      - containerPort: 6641
+                        hostPort: 6641
+                        protocol: TCP
+                  resources: {}
+                  securityContext:
+                      capabilities:
+                          add:
+                              - NET_ADMIN
+                              - SYS_MODULE
+                              - SYS_NICE
+                              - NET_BIND_SERVICE
+                      privileged: true
+                  volumeMounts:
+                      - mountPath: /var/run/ovn
+                        name: ovnrun
+                      - mountPath: /var/lib/ovn
+                        name: ovnlib
+                      - mountPath: /var/log/ovn
+                        name: log
+                - args:
+                      - --db-sb-addr=192.168.12.177
+                      - --db-sb-create-insecure-remote=yes
+                      - run_sb_ovsdb
+                  command:
+                      - ovn-ctl
+                  env:
+                      - name: CENTRAL_IP
+                        value: 192.168.12.177
+                  image: registry.devnovin.ir/novincloud/docker-images/ovs:dpdk
+                  imagePullPolicy: IfNotPresent
+                  name: sb-ovsdb
+                  ports:
+                      - containerPort: 6642
+                        hostPort: 6642
+                        protocol: TCP
+                  resources: {}
+                  securityContext:
+                      capabilities:
+                          add:
+                              - NET_ADMIN
+                              - SYS_MODULE
+                              - SYS_NICE
+                              - NET_BIND_SERVICE
+                      privileged: true
+                  volumeMounts:
+                      - mountPath: /var/run/ovn
+                        name: ovnrun
+                      - mountPath: /var/lib/ovn
+                        name: ovnlib
+                      - mountPath: /var/log/ovn
+                        name: log
+                - args:
+                      - --ovn-northd-nb-db=tcp:192.168.12.177:6641
+                      - --ovn-northd-sb-db=tcp:192.168.12.177:6642
+                  command:
+                      - ovn-northd
+                  env:
+                      - name: CENTRAL_IP
+                        value: 192.168.12.177
+                  image: registry.devnovin.ir/novincloud/docker-images/ovs:dpdk
+                  imagePullPolicy: IfNotPresent
+                  name: northd
+                  resources: {}
+                  securityContext:
+                      capabilities:
+                          add:
+                              - NET_ADMIN
+                              - SYS_MODULE
+                              - SYS_NICE
+                              - NET_BIND_SERVICE
+                      privileged: true
+                  volumeMounts:
+                      - mountPath: /var/run/ovn
+                        name: ovnrun
+                      - mountPath: /var/lib/ovn
+                        name: ovnlib
+                      - mountPath: /var/log/ovn
+                        name: log
+            dnsPolicy: ClusterFirstWithHostNet
+            hostIPC: true
+            hostNetwork: true
+            hostPID: true
+            imagePullSecrets:
+                - name: regcred
+            nodeSelector:
+                node-role.kubernetes.io/control-plane: "true"
+            volumes:
+                - hostPath:
+                      path: /var/run/ovn
+                      type: Directory
+                  name: ovnrun
+                - hostPath:
+                      path: /var/lib/ovn
+                      type: Directory
+                  name: ovnlib
+                - hostPath:
+                      path: /var/log/ovn
+                      type: Directory
+                  name: log
