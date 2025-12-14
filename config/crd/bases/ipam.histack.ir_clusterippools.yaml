@@ -55,8 +55,7 @@ spec:
             description: status defines the observed state of ClusterIPPool
             properties:
               allocatedIPs:
-                format: int64
-                type: integer
+                type: string
               conditions:
                 description: |-
                   conditions represent the current state of the ClusterIPPool resource.
@@ -127,21 +126,20 @@ spec:
                 - type
                 x-kubernetes-list-type: map
               freeIPs:
-                format: int64
-                type: integer
+                type: string
               nextIndex:
-                default: 0
-                format: int64
-                type: integer
+                type: string
               releasedClusterIPs:
                 items:
                   type: string
                 type: array
               totalIPs:
-                format: int64
-                type: integer
+                type: string
             required:
+            - allocatedIPs
+            - freeIPs
             - nextIndex
+            - totalIPs
             type: object
         required:
         - spec

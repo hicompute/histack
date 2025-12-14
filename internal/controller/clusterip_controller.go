@@ -18,9 +18,11 @@ package controller
 
 import (
 	"context"
+	"math/big"
 
 	"github.com/hicompute/histack/api/v1alpha1"
 	ipamv1alpha1 "github.com/hicompute/histack/api/v1alpha1"
+	helper "github.com/hicompute/histack/pkg/helpers"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -53,7 +55,7 @@ func (r *ClusterIPReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, err
 	}
 
-	if clusterIP.Spec.Mac == "" {
+	if clusterIP.Spec.Mac == "" && clusterIP.Spec.Resource == "" {
 		// handler release
 		var clusterIPPool v1alpha1.ClusterIPPool
 		if err := r.Client.Get(ctx, client.ObjectKey{Name: clusterIP.Spec.ClusterIPPool}, &clusterIPPool); err != nil {
@@ -61,8 +63,16 @@ func (r *ClusterIPReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 		pool := clusterIPPool.DeepCopy()
 		pool.Status.ReleasedClusterIPs = append(pool.Status.ReleasedClusterIPs, clusterIP.GetName())
-		pool.Status.FreeIPs++
-		pool.Status.AllocatedIPs--
+
+		freeIPs := helper.StringToBigInt(pool.Status.FreeIPs)
+		allocatedIps := helper.StringToBigInt(pool.Status.AllocatedIPs)
+
+		freeIPs.Add(freeIPs, big.NewInt(1))
+		allocatedIps.Sub(allocatedIps, big.NewInt(1))
+
+		pool.Status.FreeIPs = freeIPs.String()
+		pool.Status.AllocatedIPs = allocatedIps.String()
+
 		if err := r.Client.Status().Update(ctx, pool); err != nil {
 			log.Error(err, "update cluster ip pool failed.")
 		}

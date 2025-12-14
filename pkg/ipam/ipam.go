@@ -3,11 +3,13 @@ package ipam
 import (
 	"context"
 	"fmt"
+	"math/big"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/hicompute/histack/api/v1alpha1"
+	helper "github.com/hicompute/histack/pkg/helpers"
 	"github.com/hicompute/histack/pkg/k8s"
 	netutils "github.com/hicompute/histack/pkg/net_utils"
 	corev1 "k8s.io/api/core/v1"
@@ -85,15 +87,23 @@ func (ipam *IPAM) createClusterIP(iface string, mac *string, ipFamily, resource 
 		return nil, nil, err
 	}
 
-	var idx uint64
+	var idx *big.Int
 
 	var clusterIP v1alpha1.ClusterIP
 	ipPool = ipPool.DeepCopy()
 
-	ipPool.Status.AllocatedIPs++
-	ipPool.Status.FreeIPs--
+	allocatedIps := helper.StringToBigInt(ipPool.Status.AllocatedIPs)
+	freeIps := helper.StringToBigInt(ipPool.Status.FreeIPs)
+	totalIps := helper.StringToBigInt(ipPool.Status.TotalIPs)
+	nextIndex := helper.StringToBigInt(ipPool.Status.NextIndex)
 
-	if ipPool.Status.NextIndex >= ipPool.Status.TotalIPs {
+	allocatedIps.Add(allocatedIps, big.NewInt(1))
+
+	freeIps.Sub(freeIps, big.NewInt(1))
+
+	idx = helper.StringToBigInt(ipPool.Status.NextIndex)
+
+	if idx.Cmp(totalIps.Sub(totalIps, big.NewInt(1))) == 0 || idx.Cmp(totalIps.Sub(totalIps, big.NewInt(1))) == 1 {
 		// use a released ip
 		firstReleasedIPName := ipPool.Status.ReleasedClusterIPs[0]
 		if err = ipam.k8sClient.Get(ctx, client.ObjectKey{Name: firstReleasedIPName}, &clusterIP); err != nil {
@@ -107,7 +117,7 @@ func (ipam *IPAM) createClusterIP(iface string, mac *string, ipFamily, resource 
 		}
 		return &clusterIP, nil, nil
 	}
-	ipAddress, err := netutils.PickIPFromCIDRindex(ipPool.Spec.CIDR, idx)
+	ipAddress, err := netutils.PickUsableIPFromCIDRIndex(ipPool.Spec.CIDR, idx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -136,6 +146,16 @@ func (ipam *IPAM) createClusterIP(iface string, mac *string, ipFamily, resource 
 		return nil, nil, err
 	}
 
+	if idx.Cmp(totalIps.Sub(totalIps, big.NewInt(1))) == -1 {
+		nextIndex.Add(nextIndex, big.NewInt(1))
+	}
+
+	ipPool.Status.AllocatedIPs = allocatedIps.String()
+	ipPool.Status.TotalIPs = totalIps.String()
+	ipPool.Status.AllocatedIPs = allocatedIps.String()
+	ipPool.Status.NextIndex = nextIndex.String()
+	ipPool.Status.FreeIPs = freeIps.String()
+
 	if err := ipam.k8sClient.Status().Update(ctx, ipPool); err != nil {
 		return nil, nil, err
 	}
@@ -155,7 +175,7 @@ func (ipam *IPAM) findEmptyClusterIPPool(ipFamily string) (*v1alpha1.ClusterIPPo
 		return nil, err
 	}
 	for _, pool := range list.Items {
-		if pool.Status.FreeIPs > 0 {
+		if helper.StringToBigInt(pool.Status.FreeIPs).Cmp(big.NewInt(0)) == 1 {
 			return &pool, nil
 		}
 	}

@@ -62,7 +62,6 @@ func (r *KubevirtVMIReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			})
 			item.Spec.Mac = ""
 			item.Spec.Interface = ""
-			item.Spec.Resource = ""
 			result = append(result, item)
 		}
 		return result

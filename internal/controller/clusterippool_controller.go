@@ -73,11 +73,10 @@ func (r *ClusterIPPoolReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		_ = r.Status().Update(ctx, &pool)
 		return ctrl.Result{}, nil
 	}
-	totalIPs := netutils.CountIPs(ipnet)
-	freeIPs := totalIPs
+	totalIPs := netutils.CountUsableIPs(ipnet)
 	newStatus := pool.Status.DeepCopy()
-	newStatus.TotalIPs = totalIPs
-	newStatus.FreeIPs = freeIPs
+	newStatus.TotalIPs = totalIPs.String()
+	newStatus.FreeIPs = totalIPs.String()
 	if reflect.DeepEqual(&pool.Status, newStatus) {
 		return ctrl.Result{}, nil // no changes
 	}
