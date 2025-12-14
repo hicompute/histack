@@ -99,7 +99,7 @@ func (ipam *IPAM) createClusterIP(iface string, mac *string, ipFamily, resource 
 
 	allocatedIps.Add(allocatedIps, big.NewInt(1))
 
-	freeIps.Sub(freeIps, big.NewInt(1))
+	freeIps = freeIps.Sub(freeIps, big.NewInt(1))
 
 	idx = helper.StringToBigInt(ipPool.Status.NextIndex)
 

@@ -36,6 +36,9 @@ func (r *KubevirtVMIReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, err
 	}
 
+	if vmi.Status.Phase != kubevirtv1.Running {
+		return ctrl.Result{}, nil
+	}
 	interfaces := vmi.Status.Interfaces
 	if len(interfaces) == 0 {
 		return ctrl.Result{}, nil
@@ -54,12 +57,17 @@ func (r *KubevirtVMIReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			return i.MAC == item.Spec.Mac
 		})
 		if !ok {
-			item.Status.History = append(item.Status.History, v1alpha1.ClusterIPHistory{
+			historyItem := v1alpha1.ClusterIPHistory{
 				Mac:        item.Spec.Mac,
 				ReleasedAt: v1.Now(),
 				Interface:  item.Spec.Interface,
 				Resource:   item.Spec.Resource,
-			})
+			}
+			if len(item.Status.History) <= 0 {
+				item.Status.History = []v1alpha1.ClusterIPHistory{historyItem}
+			} else {
+				item.Status.History = append(item.Status.History, historyItem)
+			}
 			item.Spec.Mac = ""
 			item.Spec.Interface = ""
 			result = append(result, item)
