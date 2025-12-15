@@ -1,12 +1,13 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
     labels:
         k8s-app: ovn-central
     name: ovn-central
     namespace: ik8s-system
 spec:
-    replicas: 1
+    serviceName: ovn-central
+    replicas: 3
     selector:
         matchLabels:
             k8s-app: ovn-central
@@ -17,21 +18,45 @@ spec:
                 name: ovn-central
         spec:
             containers:
-                - args:
-                      - --db-nb-addr=192.168.12.177
-                      - --db-nb-create-insecure-remote=yes
-                      - run_nb_ovsdb
+                - name: nb-ovsdb
+                  args:
+                      - -c
+                      - |
+                          set -e
+                          apt --update install dnsutils -y
+                          CENTRAL_IP=$(nslookup ovn-central-0.ovn-central | awk '/^Address: / {print $2}' | tail -n1)
+                          REPLICAS=$((REPLICAS))
+                          if [ "$REPLICAS" -ge 3 ]; then
+                            CLUSTER_CMD_OPTIONS=--db-nb-cluster-local-addr=${POD_IP}
+                            if [ "$POD_NAME" != "ovn-central-0" ]; then
+                                CLUSTER_CMD_OPTIONS="${CLUSTER_CMD_OPTIONS} --db-nb-cluster-remote-addr=${CENTRAL_IP}"
+                            fi
+                          fi
+
+                          exec ovn-ctl run_nb_ovsdb \
+                            ${CLUSTER_CMD_OPTIONS} \
+                            --db-nb-addr=${POD_IP} \
+                            --db-nb-create-insecure-remote=yes \
+                            --log-file=/dev/stdout
                   command:
-                      - ovn-ctl
+                      - sh
                   env:
-                      - name: CENTRAL_IP
-                        value: 192.168.12.177
+                      - name: POD_NAME
+                        valueFrom:
+                            fieldRef:
+                                fieldPath: metadata.name
+                      - name: REPLICAS
+                        value: "3"
+                      - name: POD_IP
+                        valueFrom:
+                            fieldRef:
+                                fieldPath: status.podIP
                   image: registry.devnovin.ir/novincloud/docker-images/ovs:dpdk
                   imagePullPolicy: IfNotPresent
-                  name: nb-ovsdb
                   ports:
                       - containerPort: 6641
-                        hostPort: 6641
+                        protocol: TCP
+                      - containerPort: 6643
                         protocol: TCP
                   resources: {}
                   securityContext:
@@ -49,18 +74,42 @@ spec:
                         name: ovnlib
                       - mountPath: /var/log/ovn
                         name: log
-                - args:
-                      - --db-sb-addr=192.168.12.177
-                      - --db-sb-create-insecure-remote=yes
-                      - run_sb_ovsdb
+                - name: sb-ovsdb
+                  args:
+                      - -c
+                      - |
+                          set -e
+                          apt --update install dnsutils -y
+                          CENTRAL_IP=$(nslookup ovn-central-0.ovn-central | awk '/^Address: / {print $2}' | tail -n1)
+                          REPLICAS=$((REPLICAS))
+                          if [ "$REPLICAS" -ge 3 ]; then
+                            CLUSTER_CMD_OPTIONS=--db-sb-cluster-local-addr=${POD_IP}
+                            if [ "$POD_NAME" != "ovn-central-0" ]; then
+                                CLUSTER_CMD_OPTIONS="${CLUSTER_CMD_OPTIONS} --db-sb-cluster-remote-addr=${CENTRAL_IP}"
+                            fi
+                          fi
+
+                          exec ovn-ctl run_sb_ovsdb \
+                            ${CLUSTER_CMD_OPTIONS} \
+                            --db-sb-addr=${POD_IP} \
+                            --db-sb-create-insecure-remote=yes \
+                            --log-file=/dev/stdout
                   command:
-                      - ovn-ctl
+                      - sh
                   env:
-                      - name: CENTRAL_IP
-                        value: 192.168.12.177
+                      - name: POD_NAME
+                        valueFrom:
+                            fieldRef:
+                                fieldPath: metadata.name
+                      - name: REPLICAS
+                        value: "3"
+                      - name: POD_IP
+                        valueFrom:
+                            fieldRef:
+                                fieldPath: status.podIP
                   image: registry.devnovin.ir/novincloud/docker-images/ovs:dpdk
                   imagePullPolicy: IfNotPresent
-                  name: sb-ovsdb
+
                   ports:
                       - containerPort: 6642
                         hostPort: 6642
@@ -81,17 +130,38 @@ spec:
                         name: ovnlib
                       - mountPath: /var/log/ovn
                         name: log
-                - args:
-                      - --ovn-northd-nb-db=tcp:192.168.12.177:6641
-                      - --ovn-northd-sb-db=tcp:192.168.12.177:6642
+
+                - name: northd
+                  env:
+                      - name: REPLICAS
+                        value: "3"
+                  args:
+                      - -c
+                      - |
+                          set -e
+                          apt --update install dnsutils -y
+                          REPLICAS=$((REPLICAS))
+                          for i in $(seq 0 $((REPLICAS - 1))); do
+                              IP=$(nslookup ovn-central-${i}.ovn-central | awk '/^Address: / {print $2}' | tail -n1)
+                            if [ "$i" != "$ORDINAL" ]; then
+                              OVN_NB_DB="${OVN_NB_DB},${IP}"
+                              OVN_SB_DB="${OVN_SB_DB},${IP}"
+                            fi
+                          done
+                          OVN_NB_DB="${OVN_NB_DB#,}"
+                          OVN_SB_DB="${OVN_SB_DB#,}"
+
+                          echo "NB DB: ${OVN_NB_DB}"
+                          echo "SB DB: ${OVN_SB_DB}"
+
+                          exec ovn-northd \
+                            --ovn-northd-nb-db=${OVN_NB_DB}
+                            --ovn-northd-sb-db=${OVN_SB_DB}
+                            --log-file=/dev/stdout
                   command:
                       - ovn-northd
-                  env:
-                      - name: CENTRAL_IP
-                        value: 192.168.12.177
                   image: registry.devnovin.ir/novincloud/docker-images/ovs:dpdk
                   imagePullPolicy: IfNotPresent
-                  name: northd
                   resources: {}
                   securityContext:
                       capabilities:
@@ -116,16 +186,35 @@ spec:
                 - name: regcred
             nodeSelector:
                 node-role.kubernetes.io/control-plane: "true"
+            affinity:
+                podAntiAffinity:
+                    requiredDuringSchedulingIgnoredDuringExecution:
+                        - labelSelector:
+                              matchLabels:
+                                  k8s-app: ovn-central
+                          topologyKey: kubernetes.io/hostname
             volumes:
                 - hostPath:
                       path: /var/run/ovn
-                      type: Directory
+                      type: DirectoryOrCreate
                   name: ovnrun
                 - hostPath:
                       path: /var/lib/ovn
-                      type: Directory
+                      type: DirectoryOrCreate
                   name: ovnlib
                 - hostPath:
                       path: /var/log/ovn
-                      type: Directory
+                      type: DirectoryOrCreate
                   name: log
+---
+apiVersion: v1
+kind: Service
+metadata:
+    name: ovn-central
+    namespace: ik8s-system
+spec:
+    clusterIP: None
+    ipFamilies:
+        - IPv4
+    selector:
+        k8s-app: ovn-central

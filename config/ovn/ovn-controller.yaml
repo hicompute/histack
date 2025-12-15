@@ -4,7 +4,7 @@ metadata:
     labels:
         k8s-app: ovn-controller
     name: ovn-controller
-    namespace: histack-system
+    namespace: ik8s-system
 spec:
     selector:
         matchLabels:
@@ -102,7 +102,7 @@ spec:
                             --detach
                           ovs-vsctl set Open_vSwitch . \
                             external_ids:system-id=$(hostname) \
-                            external_ids:ovn-remote=tcp:192.168.12.177:6642 \
+                            external_ids:ovn-remote=tcp:ovn-central-0.ovn-central:6642,tcp:ovn-central-1.ovn-central:6642,tcp:ovn-central-2.ovn-central:6642 \
                             external_ids:ovn-encap-type=geneve \
                             external_ids:ovn-encap-ip=$NODE_IP \
                             other_config:dpdk-init=true \
@@ -140,19 +140,19 @@ spec:
             volumes:
                 - hostPath:
                       path: /etc/openvswitch
-                      type: Directory
+                      type: DirectoryOrCreate
                   name: ovsconf
                 - hostPath:
                       path: /var/run/openvswitch
-                      type: Directory
+                      type: DirectoryOrCreate
                   name: ovsrun
                 - hostPath:
                       path: /var/lib/openvswitch
-                      type: Directory
+                      type: DirectoryOrCreate
                   name: ovslib
                 - hostPath:
                       path: /var/run/ovn
-                      type: Directory
+                      type: DirectoryOrCreate
                   name: ovnrun
                 - hostPath:
                       path: /var/run/netns
@@ -160,9 +160,9 @@ spec:
                   name: netns
                 - hostPath:
                       path: /var/log/openvswitch
-                      type: Directory
+                      type: DirectoryOrCreate
                   name: log
                 - hostPath:
                       path: /dev/hugepages
-                      type: Directory
+                      type: DirectoryOrCreate
                   name: hugepages
