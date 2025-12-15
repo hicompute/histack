@@ -23,34 +23,24 @@ spec:
                       - -c
                       - |
                           set -e
-                          apt --update install dnsutils -y
-                          CENTRAL_IP=$(nslookup ovn-central-0.ovn-central | awk '/^Address: / {print $2}' | tail -n1)
-                          REPLICAS=$((REPLICAS))
-                          if [ "$REPLICAS" -ge 3 ]; then
-                            CLUSTER_CMD_OPTIONS=--db-nb-cluster-local-addr=${POD_IP}
-                            if [ "$POD_NAME" != "ovn-central-0" ]; then
-                                CLUSTER_CMD_OPTIONS="${CLUSTER_CMD_OPTIONS} --db-nb-cluster-remote-addr=${CENTRAL_IP}"
-                            fi
+                          CLUSTER_CMD_OPTIONS=--db-nb-cluster-local-addr=${POD_IP}
+                          if [ "$POD_IP" != "$CENTRAL_CLUSTER_LEADER_IP" ]; then
+                              CLUSTER_CMD_OPTIONS="${CLUSTER_CMD_OPTIONS} --db-nb-cluster-remote-addr=${CENTRAL_CLUSTER_LEADER_IP}"
                           fi
 
-                          exec ovn-ctl run_nb_ovsdb \
+                          ovn-ctl run_nb_ovsdb \
                             ${CLUSTER_CMD_OPTIONS} \
                             --db-nb-addr=${POD_IP} \
-                            --db-nb-create-insecure-remote=yes \
-                            --log-file=/dev/stdout
+                            --db-nb-create-insecure-remote=yes
                   command:
                       - sh
                   env:
-                      - name: POD_NAME
-                        valueFrom:
-                            fieldRef:
-                                fieldPath: metadata.name
-                      - name: REPLICAS
-                        value: "3"
                       - name: POD_IP
                         valueFrom:
                             fieldRef:
                                 fieldPath: status.podIP
+                      - name: CENTRAL_CLUSTER_LEADER_IP
+                        value: "192.168.12.177"
                   image: registry.devnovin.ir/novincloud/docker-images/ovs:dpdk
                   imagePullPolicy: IfNotPresent
                   ports:
@@ -79,40 +69,31 @@ spec:
                       - -c
                       - |
                           set -e
-                          apt --update install dnsutils -y
-                          CENTRAL_IP=$(nslookup ovn-central-0.ovn-central | awk '/^Address: / {print $2}' | tail -n1)
-                          REPLICAS=$((REPLICAS))
-                          if [ "$REPLICAS" -ge 3 ]; then
-                            CLUSTER_CMD_OPTIONS=--db-sb-cluster-local-addr=${POD_IP}
-                            if [ "$POD_NAME" != "ovn-central-0" ]; then
-                                CLUSTER_CMD_OPTIONS="${CLUSTER_CMD_OPTIONS} --db-sb-cluster-remote-addr=${CENTRAL_IP}"
-                            fi
+                          CLUSTER_CMD_OPTIONS=--db-sb-cluster-local-addr=${POD_IP}
+                          if [ "$POD_IP" != "$CENTRAL_CLUSTER_LEADER_IP" ]; then
+                              CLUSTER_CMD_OPTIONS="${CLUSTER_CMD_OPTIONS} --db-sb-cluster-remote-addr=${CENTRAL_CLUSTER_LEADER_IP}"
                           fi
 
-                          exec ovn-ctl run_sb_ovsdb \
+                          ovn-ctl run_sb_ovsdb \
                             ${CLUSTER_CMD_OPTIONS} \
                             --db-sb-addr=${POD_IP} \
-                            --db-sb-create-insecure-remote=yes \
-                            --log-file=/dev/stdout
+                            --db-sb-create-insecure-remote=yes
                   command:
                       - sh
                   env:
-                      - name: POD_NAME
-                        valueFrom:
-                            fieldRef:
-                                fieldPath: metadata.name
-                      - name: REPLICAS
-                        value: "3"
                       - name: POD_IP
                         valueFrom:
                             fieldRef:
                                 fieldPath: status.podIP
+                      - name: CENTRAL_CLUSTER_LEADER_IP
+                        value: "192.168.12.177"
                   image: registry.devnovin.ir/novincloud/docker-images/ovs:dpdk
                   imagePullPolicy: IfNotPresent
 
                   ports:
                       - containerPort: 6642
-                        hostPort: 6642
+                        protocol: TCP
+                      - containerPort: 6644
                         protocol: TCP
                   resources: {}
                   securityContext:
@@ -132,32 +113,9 @@ spec:
                         name: log
 
                 - name: northd
-                  env:
-                      - name: REPLICAS
-                        value: "3"
                   args:
-                      - -c
-                      - |
-                          set -e
-                          apt --update install dnsutils -y
-                          REPLICAS=$((REPLICAS))
-                          for i in $(seq 0 $((REPLICAS - 1))); do
-                              IP=$(nslookup ovn-central-${i}.ovn-central | awk '/^Address: / {print $2}' | tail -n1)
-                            if [ "$i" != "$ORDINAL" ]; then
-                              OVN_NB_DB="${OVN_NB_DB},${IP}"
-                              OVN_SB_DB="${OVN_SB_DB},${IP}"
-                            fi
-                          done
-                          OVN_NB_DB="${OVN_NB_DB#,}"
-                          OVN_SB_DB="${OVN_SB_DB#,}"
-
-                          echo "NB DB: ${OVN_NB_DB}"
-                          echo "SB DB: ${OVN_SB_DB}"
-
-                          exec ovn-northd \
-                            --ovn-northd-nb-db=${OVN_NB_DB}
-                            --ovn-northd-sb-db=${OVN_SB_DB}
-                            --log-file=/dev/stdout
+                      - --ovn-northd-nb-db=tcp:ovn-central-0.ovn-central:6641,tcp:ovn-central-1.ovn-central:6641,tcp:ovn-central-2.ovn-central:6641
+                      - --ovn-northd-sb-db=tcp:ovn-central-0.ovn-central:6642,tcp:ovn-central-1.ovn-central:6642,tcp:ovn-central-2.ovn-central:6642
                   command:
                       - ovn-northd
                   image: registry.devnovin.ir/novincloud/docker-images/ovs:dpdk
