@@ -114,8 +114,8 @@ spec:
 
                 - name: northd
                   args:
-                      - --ovn-northd-nb-db=tcp:ovn-central-0.ovn-central:6641,tcp:ovn-central-1.ovn-central:6641,tcp:ovn-central-2.ovn-central:6641
-                      - --ovn-northd-sb-db=tcp:ovn-central-0.ovn-central:6642,tcp:ovn-central-1.ovn-central:6642,tcp:ovn-central-2.ovn-central:6642
+                      - --ovn-northd-nb-db=tcp:ovn-central-0.ovn-central:6641
+                      - --ovn-northd-sb-db=tcp:ovn-central-0.ovn-central:6642
                   command:
                       - ovn-northd
                   image: registry.devnovin.ir/novincloud/docker-images/ovs:dpdk

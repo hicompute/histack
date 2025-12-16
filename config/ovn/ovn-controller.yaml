@@ -102,7 +102,7 @@ spec:
                             --detach
                           ovs-vsctl set Open_vSwitch . \
                             external_ids:system-id=$(hostname) \
-                            external_ids:ovn-remote=tcp:ovn-central-0.ovn-central:6642,tcp:ovn-central-1.ovn-central:6642,tcp:ovn-central-2.ovn-central:6642 \
+                            external_ids:ovn-remote=tcp:192.168.12.177:6642,tcp:192.168.12.178:6642,tcp:192.168.12.179:6642 \
                             external_ids:ovn-encap-type=geneve \
                             external_ids:ovn-encap-ip=$NODE_IP \
                             other_config:dpdk-init=true \
