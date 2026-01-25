@@ -7,6 +7,7 @@ require (
 	github.com/containernetworking/plugins v1.8.0
 	github.com/google/uuid v1.6.0
 	github.com/insomniacslk/dhcp v0.0.0-20240829085014-a3a4c1f04475
+	github.com/jaswdr/faker/v2 v2.9.1
 	github.com/onsi/ginkgo/v2 v2.25.1
 	github.com/onsi/gomega v1.38.1
 	github.com/ovn-kubernetes/libovsdb v0.8.1
