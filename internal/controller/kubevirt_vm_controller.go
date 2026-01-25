@@ -2,13 +2,15 @@ package controller
 
 import (
 	"context"
+	"fmt"
 
+	"github.com/jaswdr/faker/v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/hicompute/histack/api/v1alpha1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	"github.com/hicompute/histack/api/v1alpha1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	kubevirtv1 "kubevirt.io/api/core/v1"
@@ -42,9 +44,45 @@ func (r *KubeVirtVMReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return r.handleVMDeletion(ctx, req.Namespace, req.Name, *vm.DeletionTimestamp)
 	}
 
-	// if vm.Status.ObservedGeneration != vm.GetGeneration() {
-	// 	return r.handleVMUpdate(ctx, vm)
-	// }
+	if vm.Status.ObservedGeneration != vm.GetGeneration() {
+		// return r.handleVMUpdate(ctx, vm)
+		return ctrl.Result{}, nil
+	}
+
+	// handle vm creation.
+	fake := faker.New()
+	vmCredentialsSecret := &corev1.Secret{}
+	vmCredentialsSecret.Name = fmt.Sprintf("%s-credentials", vm.Name)
+	vmCredentialsSecret.Data = map[string][]byte{
+		"username": []byte(fake.Internet().User()),
+		"password": []byte(fake.Internet().Password()),
+	}
+
+	err := r.Client.Create(ctx, vmCredentialsSecret)
+	if (err != nil) && (!errors.IsAlreadyExists(err)) {
+		log.Error(err, "Failed to create VM credentials secret", "vm", vm.Name)
+		return ctrl.Result{}, err
+	}
+
+	vm.Spec.Template.Spec.AccessCredentials = []kubevirtv1.AccessCredential{
+		{
+			UserPassword: &kubevirtv1.UserPasswordAccessCredential{
+				Source: kubevirtv1.UserPasswordAccessCredentialSource{
+					Secret: &kubevirtv1.AccessCredentialSecretSource{
+						SecretName: vmCredentialsSecret.Name,
+					},
+				},
+				PropagationMethod: kubevirtv1.UserPasswordAccessCredentialPropagationMethod{
+					QemuGuestAgent: &kubevirtv1.QemuGuestAgentUserPasswordAccessCredentialPropagation{},
+				},
+			},
+		},
+	}
+	if err := r.Update(ctx, &vm); err != nil {
+		log.Error(err, "Failed to update VM with access credentials", "vm", vm.Name)
+		return ctrl.Result{}, err
+	}
+
 	return ctrl.Result{}, nil
 }
 
@@ -64,6 +102,17 @@ func (r *KubeVirtVMReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 func (r *KubeVirtVMReconciler) handleVMDeletion(ctx context.Context, namespace, vmName string, deletedAt v1.Time) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
+
+	vmCredentials := corev1.Secret{}
+	vmCredentials.Name = fmt.Sprintf("%s-credentials", vmName)
+	vmCredentials.Namespace = namespace
+
+	if err := r.Client.Delete(ctx, &vmCredentials); err != nil {
+		log.Error(err, "Failed to delete vm credentials", "vm", vmName)
+	}
+
+	// clientset.CoreV1().Secrets(namespace).Delete(context.TODO(), name, metav1.DeleteOptions{})
+
 	clusterIPList := v1alpha1.ClusterIPList{}
 	if err := r.List(ctx, &clusterIPList, &client.ListOptions{
 		FieldSelector: fields.OneTermEqualSelector("spec.resource", namespace+"/"+vmName),
