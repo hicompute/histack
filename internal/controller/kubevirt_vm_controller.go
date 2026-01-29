@@ -44,15 +44,26 @@ func (r *KubeVirtVMReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return r.handleVMDeletion(ctx, req.Namespace, req.Name, *vm.DeletionTimestamp)
 	}
 
+	// handle vm creation.
+	if vm.GetGeneration() == 1 && vm.Status.ObservedGeneration == 0 {
+		return r.handleVMCreation(ctx, vm)
+	}
+
+	// handle update.
 	if vm.Status.ObservedGeneration != vm.GetGeneration() {
 		// return r.handleVMUpdate(ctx, vm)
 		return ctrl.Result{}, nil
 	}
 
-	// handle vm creation.
+	return ctrl.Result{}, nil
+}
+
+func (r *KubeVirtVMReconciler) handleVMCreation(ctx context.Context, vm kubevirtv1.VirtualMachine) (ctrl.Result, error) {
+	log := logf.FromContext(ctx)
 	fake := faker.New()
 	vmCredentialsSecret := &corev1.Secret{}
 	vmCredentialsSecret.Name = fmt.Sprintf("%s-credentials", vm.Name)
+	vmCredentialsSecret.Namespace = vm.Namespace
 	vmCredentialsSecret.Data = map[string][]byte{
 		"username": []byte(fake.Internet().User()),
 		"password": []byte(fake.Internet().Password()),
