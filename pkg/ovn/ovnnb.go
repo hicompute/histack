@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"maps"
 
 	"github.com/google/uuid"
 	models "github.com/hicompute/histack/pkg/ovn/models"
@@ -13,7 +14,7 @@ import (
 )
 
 // CreateLogicalPort creates a new logical port and attaches it to a logical switch
-func (oa *OVNagent) CreateLogicalPort(lsName, lspName, peerMAC string) error {
+func (oa *OVNagent) CreateLogicalPort(lsName, lspName, peerMAC string, options ...map[string]string) error {
 	ctx := context.Background()
 	lspUUID := uuid.New().String()
 	ls := &models.LogicalSwitch{Name: lsName}
@@ -31,11 +32,17 @@ func (oa *OVNagent) CreateLogicalPort(lsName, lspName, peerMAC string) error {
 		UUID:      lspUUID,
 		Name:      lspName,
 		Addresses: []string{peerMAC},
-		// ExternalIDs: map[string]string{
-		// 	"iface-id": "pod1",
-		// 	"pod":      "true",
-		// },
 	}
+
+	var opts map[string]string
+	if len(options) > 0 {
+		opts = options[0] // Get first map from slice
+	} else {
+		opts = make(map[string]string)
+	}
+
+	maps.Copy(ls.ExternalIDs, opts)
+
 	lspOp, err := oa.nbClient.Create(lsp)
 	if err != nil {
 		return fmt.Errorf("failed to create logical port %s: %v", lsp.Name, err)

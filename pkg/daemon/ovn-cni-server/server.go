@@ -13,6 +13,7 @@ import (
 
 	"github.com/containernetworking/cni/pkg/version"
 	cniTypes "github.com/hicompute/histack/pkg/daemon/ovn-cni-server/types"
+	helper "github.com/hicompute/histack/pkg/helpers"
 	histack_ipam "github.com/hicompute/histack/pkg/ipam"
 	netUtils "github.com/hicompute/histack/pkg/net_utils"
 	"github.com/hicompute/histack/pkg/ovn"
@@ -139,7 +140,13 @@ func (s *CNIServer) handleAdd(req skel.CmdArgs) cniTypes.CNIResponse {
 		}
 	}
 
-	if err := s.ovnAgent.CreateLogicalPort("public", ifaceId, contIface.Mac); err != nil {
+	vmName := helper.ExtractVMName(K8S_POD_NAME)
+
+	if err := s.ovnAgent.CreateLogicalPort("public", ifaceId, contIface.Mac, map[string]string{
+		"namespace": K8S_POD_NAMESPACE,
+		"pod":       K8S_POD_NAME,
+		"vmName":    vmName,
+	}); err != nil {
 		_ = s.ovsAgent.DelPort("br-int", ifaceId)
 		return cniTypes.CNIResponse{
 			Error: err.Error(),
