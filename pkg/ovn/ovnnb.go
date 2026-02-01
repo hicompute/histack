@@ -29,9 +29,10 @@ func (oa *OVNagent) CreateLogicalPort(lsName, lspName, peerMAC string, options .
 	}
 
 	lsp := &models.LogicalSwitchPort{
-		UUID:      lspUUID,
-		Name:      lspName,
-		Addresses: []string{peerMAC},
+		UUID:        lspUUID,
+		Name:        lspName,
+		Addresses:   []string{peerMAC},
+		ExternalIDs: make(map[string]string),
 	}
 
 	var opts map[string]string
@@ -41,7 +42,7 @@ func (oa *OVNagent) CreateLogicalPort(lsName, lspName, peerMAC string, options .
 		opts = make(map[string]string)
 	}
 
-	maps.Copy(ls.ExternalIDs, opts)
+	maps.Copy(lsp.ExternalIDs, opts)
 
 	lspOp, err := oa.nbClient.Create(lsp)
 	if err != nil {
