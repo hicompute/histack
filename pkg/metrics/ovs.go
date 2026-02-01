@@ -8,14 +8,14 @@ var (
 			Name: "ovs_port_rx_bytes",
 			Help: "Received bytes on OVS port",
 		},
-		[]string{"bridge", "interface", "iface_id"},
+		[]string{"vm_namespace", "vm", "iface"},
 	)
 	TxBytes = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "ovs_port_tx_bytes",
 			Help: "Transmitted bytes on OVS port",
 		},
-		[]string{"bridge", "interface", "iface_id"},
+		[]string{"vm_namespace", "vm", "iface"},
 	)
 )
 

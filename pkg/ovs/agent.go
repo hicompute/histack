@@ -3,7 +3,9 @@ package ovs
 import (
 	"context"
 	"log"
+	"strings"
 
+	helper "github.com/hicompute/histack/pkg/helpers"
 	"github.com/hicompute/histack/pkg/metrics"
 	ovsModels "github.com/hicompute/histack/pkg/ovs/models"
 	"github.com/ovn-kubernetes/libovsdb/client"
@@ -12,10 +14,6 @@ import (
 
 type OvsAgent struct {
 	ovsClient client.Client
-
-	// caches
-	ifaceToPort  map[string]string // iface UUID -> port UUID
-	portToBridge map[string]string // port UUID  -> bridge name
 }
 
 func CreateOVSagent() (*OvsAgent, error) {
@@ -54,9 +52,7 @@ func CreateOVSagent() (*OvsAgent, error) {
 		return nil, err
 	}
 	return &OvsAgent{
-		ovsClient:    ovsClient,
-		ifaceToPort:  make(map[string]string),
-		portToBridge: make(map[string]string),
+		ovsClient: ovsClient,
 	}, nil
 }
 
@@ -78,18 +74,22 @@ func (oa *OvsAgent) updateInterfaceStats(iface *ovsModels.Interface) {
 		stats[k] = int64(v)
 	}
 
-	ifaceID := ""
-	if iface.ExternalIDs != nil {
-		ifaceID = iface.ExternalIDs["iface-id"]
+	if iface.ExternalIDs == nil {
+		return
 	}
 
-	portUUID := oa.ifaceToPort[iface.UUID]
-	bridge := oa.portToBridge[portUUID]
+	ifaceID := iface.ExternalIDs["iface-id"]
+
+	parts := strings.Split(ifaceID, "_")
+
+	if len(parts) != 3 {
+		return
+	}
 
 	labels := map[string]string{
-		"bridge":    bridge,
-		"interface": iface.Name,
-		"iface_id":  ifaceID,
+		"vm_namespace": parts[0],
+		"vm":           helper.ExtractVMName(parts[1]),
+		"iface":        parts[2],
 	}
 
 	if v, ok := stats["rx_bytes"]; ok {
