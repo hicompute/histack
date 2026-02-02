@@ -64,7 +64,18 @@ func (r *KubeVirtVMReconciler) handleVMCreation(ctx context.Context, vm kubevirt
 	vmCredentialsSecret := &corev1.Secret{}
 	vmCredentialsSecret.Name = fmt.Sprintf("%s-credentials", vm.Name)
 	vmCredentialsSecret.Namespace = vm.Namespace
-	username := []byte(fake.Internet().User())
+
+	labels := vm.GetLabels()
+	osCategory := labels["histack/oscategory"]
+	username := "root"
+	if osCategory == "windows" {
+		username = "administrator"
+	}
+
+	if osCategory == "mikrotik" {
+		username = "admin"
+	}
+
 	password := []byte(fake.Internet().Password())
 	vmCredentialsSecret.Data = map[string][]byte{}
 	vmCredentialsSecret.Data[fmt.Sprintf("%s", username)] = password
@@ -91,38 +102,38 @@ func (r *KubeVirtVMReconciler) handleVMCreation(ctx context.Context, vm kubevirt
 			},
 		},
 	}
-	vm.Spec.Template.Spec.Volumes = append(vm.Spec.Template.Spec.Volumes, kubevirtv1.Volume{
-		Name: "cloud-init-volume",
-		VolumeSource: kubevirtv1.VolumeSource{
-			CloudInitNoCloud: &kubevirtv1.CloudInitNoCloudSource{
-				UserData: fmt.Sprintf(`#cloud-config
-package_update: true
-ssh_pwauth: true
-chpasswd:
-  expire: false
-apt:
-  primary:
-    - arches:
-        - "default"
-      uri: "http://ir.archive.ubuntu.com/ubuntu/"
-users:
-  - name: %s
-    groups: [ sudo ]
-    sudo: ALL=(ALL) NOPASSWD:ALL
-    lock_passwd: false
-`, username),
-			},
-		},
-	})
+	// 	vm.Spec.Template.Spec.Volumes = append(vm.Spec.Template.Spec.Volumes, kubevirtv1.Volume{
+	// 		Name: "cloud-init-volume",
+	// 		VolumeSource: kubevirtv1.VolumeSource{
+	// 			CloudInitNoCloud: &kubevirtv1.CloudInitNoCloudSource{
+	// 				UserData: fmt.Sprintf(`#cloud-config
+	// package_update: true
+	// ssh_pwauth: true
+	// chpasswd:
+	//   expire: false
+	// apt:
+	//   primary:
+	//     - arches:
+	//         - "default"
+	//       uri: "http://ir.archive.ubuntu.com/ubuntu/"
+	// users:
+	//   - name: %s
+	//     groups: [ sudo ]
+	//     sudo: ALL=(ALL) NOPASSWD:ALL
+	//     lock_passwd: false
+	// `, username),
+	// 			},
+	// 		},
+	// 	})
 
-	vm.Spec.Template.Spec.Domain.Devices.Disks = append(vm.Spec.Template.Spec.Domain.Devices.Disks, kubevirtv1.Disk{
-		Name: "cloud-init-volume",
-		DiskDevice: kubevirtv1.DiskDevice{
-			Disk: &kubevirtv1.DiskTarget{
-				Bus: "virtio",
-			},
-		},
-	})
+	// vm.Spec.Template.Spec.Domain.Devices.Disks = append(vm.Spec.Template.Spec.Domain.Devices.Disks, kubevirtv1.Disk{
+	// 	Name: "cloud-init-volume",
+	// 	DiskDevice: kubevirtv1.DiskDevice{
+	// 		Disk: &kubevirtv1.DiskTarget{
+	// 			Bus: "virtio",
+	// 		},
+	// 	},
+	// })
 
 	if err := r.Patch(ctx, &vm, patch); err != nil {
 		log.Error(err, "Failed to update VM.", "vm", vm.Name)
