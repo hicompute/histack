@@ -77,6 +77,8 @@ func (r *KubeVirtVMReconciler) handleVMCreation(ctx context.Context, vm kubevirt
 		return ctrl.Result{}, err
 	}
 
+	patch := client.MergeFrom(vm.DeepCopy())
+
 	vm.Spec.Template.Spec.AccessCredentials = []kubevirtv1.AccessCredential{
 		{
 			UserPassword: &kubevirtv1.UserPasswordAccessCredential{
@@ -124,8 +126,8 @@ users:
 		},
 	})
 
-	if err := r.Update(ctx, &vm); err != nil {
-		log.Error(err, "Failed to update VM with access credentials", "vm", vm.Name)
+	if err := r.Patch(ctx, &vm, patch); err != nil {
+		log.Error(err, "Failed to update VM.", "vm", vm.Name)
 		return ctrl.Result{}, err
 	}
 
