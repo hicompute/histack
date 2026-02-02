@@ -66,10 +66,8 @@ func (r *KubeVirtVMReconciler) handleVMCreation(ctx context.Context, vm kubevirt
 	vmCredentialsSecret.Namespace = vm.Namespace
 	username := []byte(fake.Internet().User())
 	password := []byte(fake.Internet().Password())
-	vmCredentialsSecret.Data = map[string][]byte{
-		"username": username,
-		"password": password,
-	}
+	vmCredentialsSecret.Data = map[string][]byte{}
+	vmCredentialsSecret.Data[fmt.Sprintf("%s", username)] = password
 
 	err := r.Client.Create(ctx, vmCredentialsSecret)
 	if (err != nil) && (!errors.IsAlreadyExists(err)) {
